@@ -1,0 +1,14 @@
+{
+  "name": "hanpass-2026-backend",
+  "version": "1.0.0",
+  "description": "Vercel backend for Hanpass 2026 Notion integration",
+  "main": "api/notion.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["notion", "vercel", "api"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}
