@@ -36,6 +36,10 @@ async function getProjects() {
 
     return response.results.map(page => {
       const props = page.properties;
+      
+      // KPI_Detail은 Select 타입
+      const kpiDetail = props.KPI_Detail?.select?.name || '';
+
       return {
         id: page.id,
         name: props.Name?.title?.[0]?.plain_text || '',
@@ -44,7 +48,7 @@ async function getProjects() {
         division: props.Division?.select?.name || '',
         goal: props.Goal?.rich_text?.[0]?.plain_text || '',
         kpi: props['KPI 1']?.relation?.[0]?.id || '',
-        kpiDetail: props.KPI_Detail?.rich_text?.[0]?.plain_text || '',
+        kpiDetail: kpiDetail,
         link: props.Link?.url || page.url,
         owner: props.Owner?.rich_text?.[0]?.plain_text || '',
         progress: props.Progress?.number || 0,
@@ -78,12 +82,12 @@ module.exports = async (req, res) => {
 
     if (type === 'kpis') {
       const kpis = await getKPIs();
-      return res.status(200).json({ success: true, data: kpis });
+      return res.status(200).json({ success: true, data: kpis, timestamp: new Date().toISOString() });
     }
 
     if (type === 'projects') {
       const projects = await getProjects();
-      return res.status(200).json({ success: true, data: projects });
+      return res.status(200).json({ success: true, data: projects, timestamp: new Date().toISOString() });
     }
 
     if (type === 'all') {
@@ -91,7 +95,11 @@ module.exports = async (req, res) => {
         getKPIs(),
         getProjects(),
       ]);
-      return res.status(200).json({ success: true, data: { kpis, projects } });
+      return res.status(200).json({ 
+        success: true, 
+        data: { kpis, projects },
+        timestamp: new Date().toISOString()
+      });
     }
 
     return res.status(400).json({ 
