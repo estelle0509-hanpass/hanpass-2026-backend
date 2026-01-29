@@ -1,0 +1,12 @@
+{
+  "name": "hanpass-2026-backend",
+  "version": "2.0.0",
+  "description": "Notion API Backend with UPDATE support",
+  "main": "api/index.js",
+  "dependencies": {
+    "@notionhq/client": "^2.2.15"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
