@@ -1,206 +1,218 @@
-// Vercel Serverless Function for Notion API with UPDATE support
-const { Client } = require('@notionhq/client');
+// Vercel Serverless Function - Notion API Handler
+// KPI → KPI_Detail → Projects 계층 구조
 
-// Environment variables
-const NOTION_TOKEN = process.env.NOTION_TOKEN;
-const KPIS_DB_ID = process.env.KPIS_DB_ID;
-const PROJECTS_DB_ID = process.env.PROJECTS_DB_ID;
-const SYNC_PASSWORD = process.env.SYNC_PASSWORD || 'hanpass2026';
+const https = require('https');
 
-// Initialize Notion client
-let notion;
-if (NOTION_TOKEN) {
-  notion = new Client({ auth: NOTION_TOKEN });
-}
+// Notion API 호출 함수
+function notionRequest(path, method = 'POST', body = null) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.notion.com',
+      port: 443,
+      path: path,
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${process.env.NOTION_TOKEN}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json'
+      }
+    };
 
-// Helper: Extract text from rich text array
-function extractText(richTextArray) {
-  if (!richTextArray || !Array.isArray(richTextArray) || richTextArray.length === 0) {
-    return '';
-  }
-  return richTextArray.map(text => text.plain_text).join('');
-}
-
-// Helper: Extract property value
-function extractProperty(page, propertyName) {
-  const property = page.properties[propertyName];
-  if (!property) return null;
-
-  switch (property.type) {
-    case 'title':
-      return extractText(property.title);
-    case 'rich_text':
-      return extractText(property.rich_text);
-    case 'select':
-      return property.select ? property.select.name : null;
-    case 'number':
-      return property.number;
-    case 'date':
-      return property.date ? property.date.start : null;
-    case 'url':
-      return property.url;
-    case 'multi_select':
-      return property.multi_select ? property.multi_select.map(item => item.name) : [];
-    default:
-      return null;
-  }
-}
-
-// Fetch KPIs
-async function fetchKPIs() {
-  try {
-    const response = await notion.databases.query({
-      database_id: KPIS_DB_ID,
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(e);
+        }
+      });
     });
 
-    return response.results.map(page => ({
-      id: page.id,
-      name: extractProperty(page, 'Name') || extractProperty(page, 'name') || 'Unknown',
-      count: extractProperty(page, 'Count') || extractProperty(page, 'count') || 0,
-    }));
-  } catch (error) {
-    console.error('Error fetching KPIs:', error);
-    throw new Error(`KPIs fetch failed: ${error.message}`);
-  }
+    req.on('error', reject);
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
 }
 
-// Fetch Projects
-async function fetchProjects() {
-  try {
-    const response = await notion.databases.query({
-      database_id: PROJECTS_DB_ID,
-    });
+// KPIs 데이터 조회
+async function getKPIs() {
+  const databaseId = process.env.KPIS_DB_ID;
+  
+  const response = await notionRequest(
+    `/v1/databases/${databaseId}/query`,
+    'POST',
+    {}
+  );
 
-    return response.results.map(page => ({
-      id: page.id,
-      name: extractProperty(page, 'Name') || extractProperty(page, 'name') || 'Unknown',
-      code: extractProperty(page, 'Code') || extractProperty(page, 'code'),
-      kpi: extractProperty(page, 'KPI') || extractProperty(page, 'kpi'),
-      division: extractProperty(page, 'Division') || extractProperty(page, 'division'),
-      country: extractProperty(page, 'Country') || extractProperty(page, 'country'),
-      status: extractProperty(page, 'Status') || extractProperty(page, 'status'),
-      owner: extractProperty(page, 'Owner') || extractProperty(page, 'owner'),
-      goal: extractProperty(page, 'Goal') || extractProperty(page, 'goal'),
-      progress: extractProperty(page, 'Progress') || extractProperty(page, 'progress') || 0,
-      deadline: extractProperty(page, 'Deadline') || extractProperty(page, 'deadline'),
-    }));
-  } catch (error) {
-    console.error('Error fetching Projects:', error);
-    throw new Error(`Projects fetch failed: ${error.message}`);
-  }
+  return response.results.map(page => ({
+    id: page.id,
+    name: page.properties.Name?.title?.[0]?.plain_text || '',
+    count: page.properties['갯수']?.rollup?.number || 0
+  }));
 }
 
-// Update Project
+// Projects 데이터 조회
+async function getProjects() {
+  const databaseId = process.env.PROJECTS_DB_ID;
+  
+  const response = await notionRequest(
+    `/v1/databases/${databaseId}/query`,
+    'POST',
+    {}
+  );
+
+  return response.results.map(page => {
+    const props = page.properties;
+    
+    // KPI Relation 처리
+    const kpiRelation = props['KPI 1']?.relation?.[0] || props.KPI?.relation?.[0];
+    const kpiName = kpiRelation ? 'relation' : (props['KPI 1']?.select?.name || props.KPI?.select?.name || '');
+    
+    return {
+      id: page.id,
+      name: props.Name?.title?.[0]?.plain_text || '',
+      kpi: kpiName,
+      kpi_detail: props.KPI_Detail?.rich_text?.[0]?.plain_text || '',
+      country: props.Country?.rich_text?.[0]?.plain_text || '',
+      division: props.Division?.select?.name || '',
+      goal: props.Goal?.rich_text?.[0]?.plain_text || '',
+      status: props.Status?.select?.name || '',
+      progress: props.Progress?.number || 0,
+      deadline: props.Deadline?.date?.start || '',
+      owner: props.Owner?.people?.[0]?.name || '',
+      link: page.url
+    };
+  });
+}
+
+// 프로젝트 업데이트
 async function updateProject(projectId, updates) {
-  try {
-    const properties = {};
-
-    if (updates.name !== undefined) {
-      properties.Name = { title: [{ text: { content: updates.name } }] };
-    }
-    if (updates.division !== undefined) {
-      properties.Division = { select: { name: updates.division } };
-    }
-    if (updates.country !== undefined) {
-      properties.Country = { rich_text: [{ text: { content: updates.country } }] };
-    }
-    if (updates.owner !== undefined) {
-      properties.Owner = { rich_text: [{ text: { content: updates.owner } }] };
-    }
-    if (updates.goal !== undefined) {
-      properties.Goal = { rich_text: [{ text: { content: updates.goal } }] };
-    }
-    if (updates.progress !== undefined) {
-      properties.Progress = { number: parseInt(updates.progress) || 0 };
-    }
-    if (updates.deadline !== undefined) {
-      properties.Deadline = { date: { start: updates.deadline } };
-    }
-    if (updates.status !== undefined) {
-      properties.Status = { select: { name: updates.status } };
-    }
-
-    await notion.pages.update({
-      page_id: projectId,
-      properties: properties,
-    });
-
-    return { success: true, projectId };
-  } catch (error) {
-    console.error('Error updating project:', error);
-    throw new Error(`Project update failed: ${error.message}`);
+  const properties = {};
+  
+  if (updates.progress !== undefined) {
+    properties.Progress = { number: parseInt(updates.progress) };
   }
+  if (updates.status) {
+    properties.Status = { select: { name: updates.status } };
+  }
+  if (updates.deadline) {
+    properties.Deadline = { date: { start: updates.deadline } };
+  }
+  
+  await notionRequest(
+    `/v1/pages/${projectId}`,
+    'PATCH',
+    { properties }
+  );
+  
+  return { success: true };
 }
 
-// Main handler
+// 계층 구조 생성: KPI → KPI_Detail → Projects
+function buildHierarchy(kpis, projects) {
+  const hierarchy = [];
+  
+  // KPI별로 그룹화
+  const kpiGroups = {};
+  
+  projects.forEach(project => {
+    const kpi = project.kpi;
+    const kpiDetail = project.kpi_detail || '기타';
+    
+    if (!kpiGroups[kpi]) {
+      kpiGroups[kpi] = {};
+    }
+    
+    if (!kpiGroups[kpi][kpiDetail]) {
+      kpiGroups[kpi][kpiDetail] = [];
+    }
+    
+    kpiGroups[kpi][kpiDetail].push(project);
+  });
+  
+  // KPI 정보와 함께 계층 구조 생성
+  kpis.forEach(kpi => {
+    const kpiName = kpi.name;
+    const details = kpiGroups[kpiName] || {};
+    
+    const detailGroups = Object.keys(details).map(detailName => ({
+      name: detailName,
+      projects: details[detailName]
+    }));
+    
+    hierarchy.push({
+      kpi: kpiName,
+      count: kpi.count,
+      details: detailGroups
+    });
+  });
+  
+  return hierarchy;
+}
+
+// 메인 핸들러
 module.exports = async (req, res) => {
+  // CORS 헤더
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
-  if (!NOTION_TOKEN || !KPIS_DB_ID || !PROJECTS_DB_ID) {
-    return res.status(500).json({
-      error: 'Missing environment variables',
-    });
-  }
-
+  
   try {
-    if (req.method === 'GET') {
-      const { type = 'all' } = req.query;
-      let data = {};
-
-      if (type === 'all' || type === 'kpis') {
-        data.kpis = await fetchKPIs();
-      }
-      if (type === 'all' || type === 'projects') {
-        data.projects = await fetchProjects();
-      }
-
-      return res.status(200).json({
-        success: true,
-        data,
-        timestamp: new Date().toISOString(),
+    const { type, projectId, updates } = req.method === 'POST' ? req.body : {};
+    const queryType = type || req.query.type || 'all';
+    
+    // 환경변수 확인
+    if (!process.env.NOTION_TOKEN || !process.env.KPIS_DB_ID || !process.env.PROJECTS_DB_ID) {
+      return res.status(500).json({
+        error: 'Missing environment variables',
+        message: 'Please set NOTION_TOKEN, KPIS_DB_ID, and PROJECTS_DB_ID'
       });
     }
-
-    if (req.method === 'POST') {
-      const { password, updates } = req.body;
-
-      if (password !== SYNC_PASSWORD) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: '비밀번호가 올바르지 않습니다.',
-        });
-      }
-
-      const results = [];
-      for (const update of updates) {
-        try {
-          const result = await updateProject(update.id, update.data);
-          results.push(result);
-        } catch (error) {
-          results.push({ success: false, projectId: update.id, error: error.message });
-        }
-      }
-
+    
+    // 프로젝트 업데이트
+    if (req.method === 'POST' && projectId) {
+      const result = await updateProject(projectId, updates);
+      return res.status(200).json(result);
+    }
+    
+    // 데이터 조회
+    const [kpis, projects] = await Promise.all([
+      getKPIs(),
+      getProjects()
+    ]);
+    
+    if (queryType === 'hierarchy') {
+      // 계층 구조 반환
+      const hierarchy = buildHierarchy(kpis, projects);
       return res.status(200).json({
         success: true,
-        results,
-        timestamp: new Date().toISOString(),
+        data: hierarchy,
+        timestamp: new Date().toISOString()
       });
     }
-
-    return res.status(405).json({ error: 'Method not allowed' });
-
+    
+    // 전체 데이터 반환
+    return res.status(200).json({
+      success: true,
+      data: {
+        kpis,
+        projects,
+        hierarchy: buildHierarchy(kpis, projects)
+      },
+      timestamp: new Date().toISOString()
+    });
+    
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('Error:', error);
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message,
+      error: 'Internal Server Error',
+      message: error.message
     });
   }
 };
