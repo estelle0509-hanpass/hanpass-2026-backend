@@ -30,23 +30,38 @@ async function getKPIs() {
 
 async function getProjects() {
   try {
-    const response = await notion.databases.query({
-      database_id: PROJECTS_DB_ID,
-    });
+    let allProjects = [];
+    let hasMore = true;
+    let startCursor = undefined;
 
-    return response.results.map(page => {
+    // 페이지네이션으로 모든 프로젝트 가져오기
+    while (hasMore) {
+      const response = await notion.databases.query({
+        database_id: PROJECTS_DB_ID,
+        start_cursor: startCursor,
+        page_size: 100, // 한 번에 최대 100개
+      });
+
+      allProjects = allProjects.concat(response.results);
+      hasMore = response.has_more;
+      startCursor = response.next_cursor;
+    }
+
+    console.log(`Total projects fetched: ${allProjects.length}`);
+
+    return allProjects.map(page => {
       const props = page.properties;
       
       // KPI_Detail - Select 타입
       const kpiDetail = props.KPI_Detail?.select?.name || '';
 
-      // Country - Multi-select 타입 (여러 국가를 쉼표로 연결)
+      // Country - Multi-select 타입
       let country = '';
       if (props.Country?.multi_select) {
         country = props.Country.multi_select.map(c => c.name).join(', ');
       }
 
-      // Owner - People 타입 (여러 담당자를 쉼표로 연결)
+      // Owner - People 타입
       let owner = '';
       if (props.Owner?.people) {
         owner = props.Owner.people.map(p => p.name || p.id).join(', ');
@@ -67,11 +82,11 @@ async function getProjects() {
       // Progress - Number 타입
       const progress = props.Progress?.number || 0;
 
-      // KPI 1 - Relation 타입
+      // KPI 1 - Relation 타입 (없으면 빈 문자열)
       const kpi = props['KPI 1']?.relation?.[0]?.id || '';
 
-      // Link - URL 타입 (없으면 Notion 페이지 URL)
-      const link = props.Link?.url || page.url;
+      // Link - 항상 Notion 페이지 URL
+      const link = page.url;
 
       // Name - Title 타입
       const name = props.Name?.title?.[0]?.plain_text || '';
@@ -118,12 +133,22 @@ module.exports = async (req, res) => {
 
     if (type === 'kpis') {
       const kpis = await getKPIs();
-      return res.status(200).json({ success: true, data: kpis, timestamp: new Date().toISOString() });
+      return res.status(200).json({ 
+        success: true, 
+        data: kpis, 
+        count: kpis.length,
+        timestamp: new Date().toISOString() 
+      });
     }
 
     if (type === 'projects') {
       const projects = await getProjects();
-      return res.status(200).json({ success: true, data: projects, timestamp: new Date().toISOString() });
+      return res.status(200).json({ 
+        success: true, 
+        data: projects,
+        count: projects.length,
+        timestamp: new Date().toISOString() 
+      });
     }
 
     if (type === 'all') {
@@ -134,6 +159,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({ 
         success: true, 
         data: { kpis, projects },
+        count: { kpis: kpis.length, projects: projects.length },
         timestamp: new Date().toISOString()
       });
     }
