@@ -37,22 +37,58 @@ async function getProjects() {
     return response.results.map(page => {
       const props = page.properties;
       
-      // KPI_Detail은 Select 타입
+      // KPI_Detail - Select 타입
       const kpiDetail = props.KPI_Detail?.select?.name || '';
+
+      // Country - Multi-select 타입 (여러 국가를 쉼표로 연결)
+      let country = '';
+      if (props.Country?.multi_select) {
+        country = props.Country.multi_select.map(c => c.name).join(', ');
+      }
+
+      // Owner - People 타입 (여러 담당자를 쉼표로 연결)
+      let owner = '';
+      if (props.Owner?.people) {
+        owner = props.Owner.people.map(p => p.name || p.id).join(', ');
+      }
+
+      // Division - Select 타입
+      const division = props.Division?.select?.name || '';
+
+      // Status - Select 타입
+      const status = props.Status?.select?.name || '';
+
+      // Goal - Rich Text 타입
+      const goal = props.Goal?.rich_text?.[0]?.plain_text || '';
+
+      // Deadline - Date 타입
+      const deadline = props.Deadline?.date?.start || '';
+
+      // Progress - Number 타입
+      const progress = props.Progress?.number || 0;
+
+      // KPI 1 - Relation 타입
+      const kpi = props['KPI 1']?.relation?.[0]?.id || '';
+
+      // Link - URL 타입 (없으면 Notion 페이지 URL)
+      const link = props.Link?.url || page.url;
+
+      // Name - Title 타입
+      const name = props.Name?.title?.[0]?.plain_text || '';
 
       return {
         id: page.id,
-        name: props.Name?.title?.[0]?.plain_text || '',
-        country: props.Country?.rich_text?.[0]?.plain_text || '',
-        deadline: props.Deadline?.date?.start || '',
-        division: props.Division?.select?.name || '',
-        goal: props.Goal?.rich_text?.[0]?.plain_text || '',
-        kpi: props['KPI 1']?.relation?.[0]?.id || '',
+        name: name,
+        country: country,
+        deadline: deadline,
+        division: division,
+        goal: goal,
+        kpi: kpi,
         kpiDetail: kpiDetail,
-        link: props.Link?.url || page.url,
-        owner: props.Owner?.rich_text?.[0]?.plain_text || '',
-        progress: props.Progress?.number || 0,
-        status: props.Status?.select?.name || '',
+        link: link,
+        owner: owner,
+        progress: progress,
+        status: status,
       };
     });
   } catch (error) {
