@@ -1,9 +1,16 @@
 {
   "name": "hanpass-2026-backend",
   "version": "1.0.0",
-  "description": "Backend API for Hanpass 2026 Dashboard",
+  "description": "HanPass 2026 Dashboard Backend API",
   "main": "api/index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
   "dependencies": {
     "@notionhq/client": "^2.2.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
