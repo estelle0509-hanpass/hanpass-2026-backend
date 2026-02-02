@@ -1,3 +1,20 @@
 {
-  "version": 2
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    }
+  ],
+  "env": {
+    "NOTION_TOKEN": "@notion-token",
+    "KPIS_DB_ID": "@kpis-db-id",
+    "PROJECTS_DB_ID": "@projects-db-id"
+  }
 }
