@@ -34,7 +34,6 @@ async function getProjects() {
     let hasMore = true;
     let startCursor = undefined;
 
-    // 모든 프로젝트 가져오기 (페이지네이션)
     while (hasMore) {
       const response = await notion.databases.query({
         database_id: PROJECTS_DB_ID,
@@ -97,7 +96,6 @@ async function getProjects() {
   }
 }
 
-// 데이터베이스 메타데이터 조회 (Select 옵션들)
 async function getDatabaseSchema() {
   try {
     const database = await notion.databases.retrieve({
@@ -123,22 +121,18 @@ async function getDatabaseSchema() {
   }
 }
 
-// 프로젝트 업데이트
 async function updateProject(projectId, updates) {
   try {
     const properties = {};
 
-    // Progress (Number)
     if (updates.progress !== undefined) {
       properties.Progress = { number: updates.progress };
     }
 
-    // Status (Select)
     if (updates.status !== undefined && updates.status !== '') {
       properties.Status = { select: { name: updates.status } };
     }
 
-    // Deadline (Date)
     if (updates.deadline !== undefined) {
       if (updates.deadline === '') {
         properties.Deadline = { date: null };
@@ -147,19 +141,16 @@ async function updateProject(projectId, updates) {
       }
     }
 
-    // Goal (Rich Text)
     if (updates.goal !== undefined) {
       properties.Goal = { 
         rich_text: [{ text: { content: updates.goal } }] 
       };
     }
 
-    // Division (Select) - 기존 옵션만
     if (updates.division !== undefined && updates.division !== '') {
       properties.Division = { select: { name: updates.division } };
     }
 
-    // Country (Multi-select) - 배열로 전달
     if (updates.country !== undefined) {
       if (Array.isArray(updates.country)) {
         properties.Country = { 
@@ -185,13 +176,13 @@ async function updateProject(projectId, updates) {
 }
 
 module.exports = async (req, res) => {
-  // 🔥 CORS 헤더 - 반드시 먼저 설정
+  // CORS 헤더 (가장 먼저 설정)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
   
-  // 🔥 캐시 방지 헤더
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  // 캐시 방지 헤더
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
 
@@ -200,14 +191,13 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // GET 요청: 데이터 조회
     if (req.method === 'GET') {
       const { type } = req.query;
 
       if (!type) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Missing type parameter. Use: ?type=kpis, ?type=projects, ?type=all, or ?type=schema' 
+          error: 'Missing type parameter' 
         });
       }
 
@@ -256,25 +246,24 @@ module.exports = async (req, res) => {
 
       return res.status(400).json({ 
         success: false, 
-        error: `Invalid type parameter: ${type}. Use: kpis, projects, schema, or all` 
+        error: `Invalid type: ${type}` 
       });
     }
 
-    // POST 요청: 프로젝트 업데이트
     if (req.method === 'POST') {
       const { projectId, updates } = req.body;
 
       if (!projectId) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Missing projectId in request body' 
+          error: 'Missing projectId' 
         });
       }
 
       if (!updates || Object.keys(updates).length === 0) {
         return res.status(400).json({ 
           success: false, 
-          error: 'Missing updates in request body' 
+          error: 'Missing updates' 
         });
       }
 
@@ -284,7 +273,7 @@ module.exports = async (req, res) => {
 
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Use GET or POST' 
+      error: 'Method not allowed' 
     });
 
   } catch (error) {
