@@ -34,6 +34,7 @@ async function getProjects() {
     let hasMore = true;
     let startCursor = undefined;
 
+    // 모든 프로젝트 가져오기 (페이지네이션)
     while (hasMore) {
       const response = await notion.databases.query({
         database_id: PROJECTS_DB_ID,
@@ -78,7 +79,7 @@ async function getProjects() {
         id: page.id,
         name: name,
         country: country,
-        countryArray: countryArray, // 배열 형태로도 제공
+        countryArray: countryArray,
         deadline: deadline,
         division: division,
         goal: goal,
@@ -184,9 +185,14 @@ async function updateProject(projectId, updates) {
 }
 
 module.exports = async (req, res) => {
+  // 🔥 핵심 수정: 캐시 완전 방지
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
