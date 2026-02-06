@@ -1,7 +1,7 @@
 {
   "name": "hanpass-2026-backend",
-  "version": "1.0.0",
-  "description": "HanPass 2026 Dashboard Backend API",
+  "version": "2.0.0",
+  "description": "HanPass 2026 Dashboard Backend API with Update Tracking",
   "main": "api/index.js",
   "scripts": {
     "dev": "vercel dev",
