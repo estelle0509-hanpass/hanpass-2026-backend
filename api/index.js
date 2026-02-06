@@ -146,11 +146,19 @@ async function getDatabaseSchema() {
       database_id: PROJECTS_DB_ID,
     });
 
+    console.log('[Schema Debug] Available properties:', Object.keys(database.properties));
+
     const schema = {
       countries: database.properties.Country?.multi_select?.options || [],
       divisions: database.properties.Division?.select?.options || [],
       statuses: database.properties.Status?.select?.options || [],
     };
+
+    console.log('[Schema Debug] Schema result:', {
+      countries: schema.countries.length,
+      divisions: schema.divisions.length,
+      statuses: schema.statuses.length,
+    });
 
     return schema;
   } catch (error) {
