@@ -227,6 +227,12 @@ module.exports = async (req, res) => {
   try {
     if (req.method === 'GET') {
       const { type, projectId, includeContent } = req.query;
+      
+      // 스키마 조회
+      if (type === 'schema') {
+        const schema = await getDatabaseSchema();
+        return res.status(200).json({ success: true, data: schema });
+      }
 
       if (type === 'kpis') {
         const kpis = await getKPIs();
