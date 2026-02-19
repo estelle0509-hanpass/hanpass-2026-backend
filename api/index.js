@@ -307,3 +307,11 @@ module.exports = async (req, res) => {
     res.end(JSON.stringify({ error: 'Not found' }));
     
   } catch (error) {
+    console.error('Server error:', error);
+    res.writeHead(500, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }));
+  }
+};
